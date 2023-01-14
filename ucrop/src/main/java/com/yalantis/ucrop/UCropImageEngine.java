@@ -2,6 +2,7 @@ package com.yalantis.ucrop;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.widget.ImageView;
 
@@ -31,6 +32,7 @@ public interface UCropImageEngine {
      */
     void loadImage(Context context, Uri url, int maxWidth, int maxHeight, OnCallbackListener<Bitmap> call);
 
+    <E extends Drawable> void loadDrawable(Context context, Uri url, int maxWidth, int maxHeight, OnCallbackListener<E> call);
 
     interface OnCallbackListener<T> {
         /**

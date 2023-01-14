@@ -2,8 +2,12 @@ package com.yalantis.ucrop.view;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.RectF;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.util.AttributeSet;
@@ -164,17 +168,30 @@ public class TransformImageView extends AppCompatImageView {
     private void useCustomLoaderCrop(@NonNull final Uri imageUri, @Nullable final Uri outputUri) {
         int[] maxImageSize = BitmapLoadUtils.getMaxImageSize(getContext(), imageUri);
         if (maxImageSize[0] > 0 && maxImageSize[1] > 0) {
-            UCropDevelopConfig.imageEngine.loadImage(getContext(), imageUri, maxImageSize[0], maxImageSize[1], new UCropImageEngine.OnCallbackListener<Bitmap>() {
-                @Override
-                public void onCall(Bitmap bitmap) {
-                    if (bitmap == null) {
-                        useDefaultLoaderCrop(imageUri, outputUri);
-                    } else {
-                        Bitmap copyBitmap = bitmap.copy(bitmap.getConfig(), true);
-                        setBitmapLoadedResult(copyBitmap, new ExifInfo(0, 0, 0), imageUri, outputUri);
+            if (outputUri != null && outputUri.toString().toLowerCase().endsWith(".gif")) {
+                UCropDevelopConfig.imageEngine.loadDrawable(getContext(), imageUri, maxImageSize[0], maxImageSize[1], new UCropImageEngine.OnCallbackListener<Drawable>() {
+                    @Override
+                    public void onCall(Drawable drawable) {
+                        if (drawable == null) {
+                            useDefaultLoaderCrop(imageUri, outputUri);
+                        } else {
+                            setBitmapLoadedResult(drawable, new ExifInfo(0, 0, 0), imageUri, outputUri);
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                UCropDevelopConfig.imageEngine.loadImage(getContext(), imageUri, maxImageSize[0], maxImageSize[1], new UCropImageEngine.OnCallbackListener<Bitmap>() {
+                    @Override
+                    public void onCall(Bitmap bitmap) {
+                        if (bitmap == null) {
+                            useDefaultLoaderCrop(imageUri, outputUri);
+                        } else {
+                            Bitmap copyBitmap = bitmap.copy(bitmap.getConfig(), true);
+                            setBitmapLoadedResult(copyBitmap, new ExifInfo(0, 0, 0), imageUri, outputUri);
+                        }
+                    }
+                });
+            }
         } else {
             useDefaultLoaderCrop(imageUri, outputUri);
         }
@@ -214,7 +231,7 @@ public class TransformImageView extends AppCompatImageView {
      * @param imageInputUri
      * @param imageOutputUri
      */
-    public void setBitmapLoadedResult(@NonNull Bitmap bitmap, @NonNull ExifInfo exifInfo, @NonNull Uri imageInputUri, @Nullable Uri imageOutputUri) {
+    public <T> void setBitmapLoadedResult(@NonNull T bitmap, @NonNull ExifInfo exifInfo, @NonNull Uri imageInputUri, @Nullable Uri imageOutputUri) {
         mImageInputUri = imageInputUri;
         mImageOutputUri = imageOutputUri;
         mImageInputPath = FileUtils.isContent(imageInputUri.toString()) ? imageInputUri.toString() : imageInputUri.getPath();
@@ -223,7 +240,12 @@ public class TransformImageView extends AppCompatImageView {
         mExifInfo = exifInfo;
 
         mBitmapDecoded = true;
-        setImageBitmap(bitmap);
+
+        if (bitmap instanceof Bitmap) {
+            setImageBitmap((Bitmap)bitmap);
+        } else if (bitmap instanceof Drawable) {
+            setImageDrawable((Drawable)bitmap);
+        }
     }
 
     /**
@@ -266,10 +288,32 @@ public class TransformImageView extends AppCompatImageView {
 
     @Nullable
     public Bitmap getViewBitmap() {
-        if (getDrawable() == null || !(getDrawable() instanceof FastBitmapDrawable)) {
+        Drawable drawable = getDrawable();
+
+        if (drawable == null) {
             return null;
+        } else if (drawable instanceof FastBitmapDrawable) {
+            return ((FastBitmapDrawable) drawable).getBitmap();
+        } else if (drawable instanceof BitmapDrawable) {
+            return ((BitmapDrawable) drawable).getBitmap();
         } else {
-            return ((FastBitmapDrawable) getDrawable()).getBitmap();
+            try {
+                Bitmap bitmap;
+
+                if (drawable instanceof ColorDrawable) {
+                    bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888);
+                } else {
+                    bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+                }
+
+                Canvas canvas = new Canvas(bitmap);
+                drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+                drawable.draw(canvas);
+                return bitmap;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
         }
     }
 
